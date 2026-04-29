@@ -7,203 +7,184 @@ import os
 from PIL import Image
 from fpdf import FPDF
 
-# ── 1. CONFIGURACIÓN Y ESTILOS ──
+# ── 1. CONFIGURACIÓN E IDENTIDAD VISUAL ──
 st.set_page_config(page_title="Sourcing Intelligence | Elymar Estévez", layout="wide", page_icon="📈")
 
+# CSS Avanzado para mejorar la UI
 st.markdown("""
     <style>
+        .main { background-color: #F8FAFC; }
         .header-banner {
             background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
-            padding: 40px; border-radius: 15px; color: white; text-align: center;
-            margin-bottom: 30px; border-bottom: 6px solid #10B981;
+            padding: 3rem; border-radius: 15px; color: white; text-align: center;
+            margin-bottom: 2rem; border-bottom: 6px solid #10B981;
         }
         .author-tag {
-            background-color: #10B981; color: white; padding: 5px 15px;
-            border-radius: 50px; font-weight: bold; font-size: 0.9rem;
+            background-color: #10B981; color: white; padding: 0.4rem 1.2rem;
+            border-radius: 50px; font-weight: bold; font-size: 0.9rem; display: inline-block;
         }
+        .stMetric { background-color: white; padding: 1rem; border-radius: 10px; border: 1px solid #E2E8F0; }
     </style>
 """, unsafe_allow_html=True)
 
-# ── 2. FUNCIONES ESTRATÉGICAS ──
-def draw_kraljic_interactive(df, label_col):
-    if df.empty: return go.Figure()
+# ── 2. LÓGICA DE NEGOCIO (MATRIZ DE KRALJIC) ──
+def calculate_kraljic_logic(df):
+    """Calcula dimensiones de impacto y riesgo basadas en el gasto y parámetros de Sourcing."""
+    total_spend = df['Gasto (€)'].sum()
     
+    # Impacto en Resultados (Eje X): Basado en Pareto de gasto
+    # Riesgo de Suministro (Eje Y): Por defecto 5 (ajustable en versiones futuras)
+    df['Impacto'] = df['Gasto (€)'].apply(lambda x: 9 if x/total_spend > 0.15 else (6 if x/total_spend > 0.05 else 3))
+    df['Riesgo'] = 5  
+    
+    def get_quadrant(i, r):
+        if i >= 6 and r >= 6: return 'Estratégico'
+        if i >= 6 and r < 6: return 'Apalancamiento'
+        if i < 6 and r >= 6: return 'Cuello de Botella'
+        return 'No Crítico'
+    
+    df['Cuadrante'] = df.apply(lambda x: get_quadrant(x['Impacto'], x['Riesgo']), axis=1)
+    return df
+
+# ── 3. MOTOR DE VISUALIZACIÓN (PLOTLY) ──
+def draw_kraljic_matrix(df, label_col):
     fig = go.Figure()
 
-    # 1. CUADRANTES DE FONDO (Matriz de Kraljic)
-    fig.add_shape(type="rect", x0=0, y0=5.5, x1=5.5, y1=11, fillcolor="#FEF3C7", opacity=0.5, line_width=0, layer="below") # Cuello de Botella
-    fig.add_shape(type="rect", x0=5.5, y0=5.5, x1=11, y1=11, fillcolor="#FEE2E2", opacity=0.5, line_width=0, layer="below") # Estratégico
-    fig.add_shape(type="rect", x0=0, y0=0, x1=5.5, y1=5.5, fillcolor="#F1F5F9", opacity=0.5, line_width=0, layer="below") # No Crítico
-    fig.add_shape(type="rect", x0=5.5, y0=0, x1=11, y1=5.5, fillcolor="#D1FAE5", opacity=0.5, line_width=0, layer="below") # Apalancamiento
+    # Dibujar áreas de la matriz (Cuadrantes)
+    areas = [
+        dict(x0=0, y0=5.5, x1=5.5, y1=11, color="#FEF3C7", name="Cuello de Botella"),
+        dict(x0=5.5, y0=5.5, x1=11, y1=11, color="#FEE2E2", name="Estratégico"),
+        dict(x0=0, y0=0, x1=5.5, y1=5.5, color="#F1F5F9", name="No Crítico"),
+        dict(x0=5.5, y0=0, x1=11, y1=5.5, color="#D1FAE5", name="Apalancamiento")
+    ]
     
-    max_gasto = df['Gasto'].max() if not df.empty else 1
-    
-    # 2. GENERACIÓN DE COLORES DINÁMICOS
-    # Usamos una paleta cualitativa para que cada punto tenga un color diferente
-    colors = px.colors.qualitative.Bold 
+    for area in areas:
+        fig.add_shape(type="rect", x0=area['x0'], y0=area['y0'], x1=area['x1'], y1=area['y1'],
+                      fillcolor=area['color'], opacity=0.4, line_width=0, layer="below")
 
-    for i, (idx, row) in enumerate(df.iterrows()):
-        color_index = i % len(colors) # Ciclar colores si hay más puntos que colores en la paleta
-        
+    # Burbujas dinámicas
+    max_bubble = df['Gasto (€)'].max() if not df.empty else 1
+    colors = px.colors.qualitative.Prism
+
+    for i, (_, row) in enumerate(df.iterrows()):
         fig.add_trace(go.Scatter(
-            x=[row['Impacto']], 
-            y=[row['Riesgo']], 
-            mode='markers', # Solo marcadores, sin etiquetas de texto solapadas
+            x=[row['Impacto']], y=[row['Riesgo']],
+            mode='markers',
             name=str(row[label_col]),
             marker=dict(
-                size=(row['Gasto']/max_gasto)*45 + 15, 
-                line=dict(width=1.5, color='white'),
-                color=colors[color_index], # Color dinámico por punto
-                opacity=0.9,
-                shadow=dict(color="black", dx=2, dy=2) # Efecto de profundidad
+                size=(row['Gasto (€)']/max_bubble)*50 + 15,
+                color=colors[i % len(colors)],
+                line=dict(width=2, color='white'),
+                opacity=0.85
             ),
-            hovertemplate=(
-                f"<b>{row[label_col]}</b><br>" +
-                f"Gasto: {row['Gasto']:,.2f} €<br>" +
-                f"Impacto (X): {row['Impacto']}<br>" +
-                f"Riesgo (Y): {row['Riesgo']}" +
-                "<extra></extra>"
-            )
+            hovertemplate=f"<b>{row[label_col]}</b><br>Gasto: {row['Gasto (€)']:,.2f} €<br>Cuadrante: {row['Cuadrante']}<extra></extra>"
         ))
 
     fig.update_layout(
-        xaxis=dict(title="IMPACTO EN RESULTADOS (0-11)", range=[-0.5, 11.5], gridcolor='#E2E8F0', zeroline=False),
-        yaxis=dict(title="RIESGO DE SUMINISTRO (0-11)", range=[-0.5, 11.5], gridcolor='#E2E8F0', zeroline=False),
-        height=650,
-        showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        template="plotly_white",
-        margin=dict(l=20, r=20, t=100, b=20)
+        xaxis=dict(title="IMPACTO (Económico)", range=[-0.5, 11.5], gridcolor='white'),
+        yaxis=dict(title="RIESGO (Suministro)", range=[-0.5, 11.5], gridcolor='white'),
+        height=600, template="plotly_white", margin=dict(t=50, b=50, l=50, r=50)
     )
     return fig
 
-def create_pdf_report(df_n1, df_micro, cat_sel):
+# ── 4. GENERADOR DE REPORTES (FPDF2) ──
+def generate_pdf(df_macro, df_micro, selected_cat):
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
     
-    # Header Estilizado
+    # Estilo de página
+    pdf.add_page()
     pdf.set_fill_color(15, 23, 42)
-    pdf.rect(0, 0, 210, 40, 'F')
-    pdf.set_font("Arial", 'B', 16)
+    pdf.rect(0, 0, 210, 45, 'F')
+    
+    pdf.set_font("Arial", 'B', 18)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(0, 15, "REPORTE ESTRATÉGICO DE COMPRAS", ln=True, align='C')
-    pdf.set_font("Arial", '', 10)
-    pdf.cell(0, 5, "Sourcing Intelligence | Dashboard Elymar Estévez", ln=True, align='C')
+    pdf.cell(0, 15, "SOURCING INTELLIGENCE REPORT", ln=True, align='C')
+    pdf.set_font("Arial", '', 11)
+    pdf.cell(0, 5, f"Analista: Elymar Estévez | Categoría: {selected_cat}", ln=True, align='C')
     
-    # Tabla Macro
+    # Tabla de datos
     pdf.set_text_color(0, 0, 0)
-    pdf.ln(30)
+    pdf.ln(35)
     pdf.set_font("Arial", 'B', 12)
-    pdf.cell(0, 10, "1. Análisis Macro por Categoría", ln=True)
+    pdf.cell(0, 10, f"Detalle de Subcategorías y Proveedores", ln=True)
     
-    pdf.set_font("Arial", 'B', 9)
+    pdf.set_font("Arial", 'B', 10)
     pdf.set_fill_color(241, 245, 249)
-    pdf.cell(90, 8, "Categoría", 1, 0, 'C', True)
-    pdf.cell(45, 8, "Gasto Total (€)", 1, 0, 'C', True)
-    pdf.cell(45, 8, "Cuadrante", 1, 1, 'C', True)
+    pdf.cell(70, 10, "Subcategoría", 1, 0, 'C', True)
+    pdf.cell(70, 10, "Proveedor", 1, 0, 'C', True)
+    pdf.cell(40, 10, "Gasto (€)", 1, 1, 'C', True)
     
-    pdf.set_font("Arial", '', 8)
-    for _, row in df_n1.sort_values('Gasto', ascending=False).iterrows():
-        pdf.cell(90, 8, str(row['Categoría'])[:50], 1)
-        pdf.cell(45, 8, f"{row['Gasto']:,.0f}", 1, 0, 'R')
-        pdf.cell(45, 8, str(row['Cuadrante']), 1, 1, 'C')
-
-    # Sección Micro
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(0, 10, f"2. Análisis Detallado: {cat_sel}", ln=True)
-    pdf.ln(5)
-    
-    pdf.set_font("Arial", 'B', 9)
-    pdf.set_fill_color(241, 245, 249)
-    pdf.cell(65, 8, "Subcategoría", 1, 0, 'C', True)
-    pdf.cell(75, 8, "Proveedor de Referencia", 1, 0, 'C', True)
-    pdf.cell(40, 8, "Gasto (€)", 1, 1, 'C', True)
-    
-    pdf.set_font("Arial", '', 8)
-    for _, row in df_micro.sort_values('Gasto', ascending=False).iterrows():
-        sub = str(row['Subcategoría']).encode('latin-1', 'replace').decode('latin-1')
-        prov = str(row['Proveedor']).encode('latin-1', 'replace').decode('latin-1')
-        pdf.cell(65, 8, sub[:40], 1)
-        pdf.cell(75, 8, prov[:45], 1)
-        pdf.cell(40, 8, f"{row['Gasto']:,.0f}", 1, 1, 'R')
-    
+    pdf.set_font("Arial", '', 9)
+    for _, row in df_micro.iterrows():
+        pdf.cell(70, 10, str(row['Subcategoría'])[:35], 1)
+        pdf.cell(70, 10, str(row['Proveedor'])[:35], 1)
+        pdf.cell(40, 10, f"{row['Gasto (€)']:,.0f}", 1, 1, 'R')
+        
     return bytes(pdf.output())
 
-# ── 3. BARRA LATERAL ──
+# ── 5. ESTRUCTURA DE LA APP (BARRA LATERAL Y NAVEGACIÓN) ──
 with st.sidebar:
     if os.path.exists("elymar.png"):
-        st.image(Image.open("elymar.png"), use_container_width=True)
-    st.markdown("<div style='text-align: center; font-weight: bold; font-size: 1.1rem;'>Elymar Estévez</div>", unsafe_allow_html=True)
+        st.image("elymar.png", use_container_width=True)
+    st.markdown("<h3 style='text-align: center;'>Elymar Estévez</h3>", unsafe_allow_html=True)
     st.divider()
-    menu = st.radio("Navegación:", ["📂 Gestión de Datos", "📊 Matriz de Kraljic"], index=1)
+    app_mode = st.radio("Módulos del Sistema:", ["📂 Carga de Datos", "📊 Matriz de Kraljic", "📋 Reportes Detallados"])
 
-# ── 4. CABECERA ──
-st.markdown("""
-    <div class="header-banner">
-        <h1>Sourcing Intelligence</h1>
-        <div class="author-tag">Business Decision Support</div>
-    </div>
-""", unsafe_allow_html=True)
+# ── 6. MÓDULOS ──
+if app_mode == "📂 Carga de Datos":
+    st.header("Gestión de Datos de Compras")
+    uploaded_file = st.file_uploader("Subir archivo Excel de Sourcing", type=["xlsx"])
+    
+    if uploaded_file:
+        df_raw = pd.read_excel(uploaded_file)
+        # Validación de columnas
+        required_cols = ['Categoría', 'Subcategoría', 'Proveedor', 'Gasto (€)']
+        if all(col in df_raw.columns for col in required_cols):
+            st.session_state['data'] = df_raw
+            st.success("Base de datos cargada y validada con éxito.")
+            st.dataframe(df_raw.head(10), use_container_width=True)
+        else:
+            st.error(f"El archivo debe contener las columnas: {', '.join(required_cols)}")
 
-# ── 5. LÓGICA DE DATOS ──
-if menu == "📂 Gestión de Datos":
-    archivo = st.file_uploader("Cargar Base de Datos de Compras (Excel)", type=['xlsx'])
-    if archivo:
-        df = pd.read_excel(archivo)
-        df['Gasto (€)'] = pd.to_numeric(df['Gasto (€)'], errors='coerce').fillna(0)
-        total = df['Gasto (€)'].sum()
-        
-        def asignar_q(i, r):
-            if i >= 6 and r >= 6: return 'Estratégico'
-            elif i >= 6: return 'Apalancamiento'
-            elif r >= 6: return 'Cuello de Botella'
-            return 'No Crítico'
-
-        n1 = df.groupby('Categoría').agg({'Gasto (€)': 'sum'}).reset_index()
-        n1['Impacto'] = n1['Gasto (€)'].apply(lambda x: 9 if x/total > 0.15 else (6 if x/total > 0.05 else 3))
-        n1['Riesgo'] = 5 
-        n1['Cuadrante'] = n1.apply(lambda x: asignar_q(x['Impacto'], x['Riesgo']), axis=1)
-        st.session_state['n1'] = n1.rename(columns={'Gasto (€)': 'Gasto'})
-
-        n2 = df.groupby(['Categoría', 'Subcategoría']).agg({'Gasto (€)': 'sum', 'Proveedor': 'first'}).reset_index()
-        n2['Impacto'] = n2['Gasto (€)'].apply(lambda x: 9 if x/total > 0.05 else (6 if x/total > 0.01 else 3))
-        n2['Riesgo'] = 5
-        n2['Cuadrante'] = n2.apply(lambda x: asignar_q(x['Impacto'], x['Riesgo']), axis=1)
-        st.session_state['n2'] = n2.rename(columns={'Gasto (€)': 'Gasto'})
-        st.success("¡Base de datos procesada y lista para análisis!")
-
-# ── 6. DASHBOARD INTERACTIVO ──
-elif menu == "📊 Matriz de Kraljic":
-    if 'n1' in st.session_state:
-        col_sel, col_btn = st.columns([3, 1])
-        
-        with col_sel:
-            sel_cat = st.selectbox("Filtrar por Categoría:", st.session_state['n2']['Categoría'].unique())
-            df_micro_f = st.session_state['n2'][st.session_state['n2']['Categoría'] == sel_cat]
-        
-        with col_btn:
-            try:
-                pdf_data = create_pdf_report(st.session_state['n1'], df_micro_f, sel_cat)
-                st.download_button(
-                    label="📥 Exportar Reporte PDF",
-                    data=pdf_data,
-                    file_name=f"Analisis_Kraljic_{sel_cat}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-            except:
-                st.info("Generando reporte...")
-
-        tab_macro, tab_micro = st.tabs(["🌎 Matriz Macro (Categorías)", "🔍 Detalle Micro (Proveedores)"])
-        
-        with tab_macro:
-            st.plotly_chart(draw_kraljic_interactive(st.session_state['n1'], 'Categoría'), use_container_width=True)
-            st.dataframe(st.session_state['n1'].sort_values('Gasto', ascending=False), hide_index=True)
-
-        with tab_micro:
-            st.plotly_chart(draw_kraljic_interactive(df_micro_f, 'Subcategoría'), use_container_width=True)
-            st.dataframe(df_micro_f.sort_values('Gasto', ascending=False), hide_index=True)
+elif app_mode == "📊 Matriz de Kraljic":
+    if 'data' not in st.session_state:
+        st.warning("Por favor, carga datos en el módulo correspondiente.")
     else:
-        st.info("💡 Pendiente: Carga un archivo Excel en el módulo 'Gestión de Datos' para iniciar el análisis.")
+        df = st.session_state['data']
+        
+        # Procesamiento Macro
+        df_macro = df.groupby('Categoría').agg({'Gasto (€)': 'sum'}).reset_index()
+        df_macro = calculate_kraljic_logic(df_macro)
+        
+        st.markdown('<div class="header-banner"><h1>Matriz de Kraljic Macro</h1><div class="author-tag">Análisis por Categoría</div></div>', unsafe_allow_html=True)
+        
+        # KPIs rápidos
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Gasto Total", f"{df['Gasto (€)'].sum():,.0f} €")
+        c2.metric("Categorías", len(df_macro))
+        c3.metric("Proveedores", df['Proveedor'].nunique())
+        
+        # Gráfico Macro
+        st.plotly_chart(draw_kraljic_matrix(df_macro, 'Categoría'), use_container_width=True)
+        
+        # Selección para análisis Micro
+        st.divider()
+        selected_cat = st.selectbox("Profundizar en Categoría:", df_macro['Categoría'].unique())
+        
+        df_micro = df[df['Categoría'] == selected_cat].groupby(['Subcategoría', 'Proveedor']).agg({'Gasto (€)': 'sum'}).reset_index()
+        df_micro = calculate_kraljic_logic(df_micro)
+        
+        st.subheader(f"Análisis Micro: {selected_cat}")
+        st.plotly_chart(draw_kraljic_matrix(df_micro, 'Subcategoría'), use_container_width=True)
+
+        # Botón de Reporte
+        pdf_data = generate_pdf(df_macro, df_micro, selected_cat)
+        st.download_button(label="📥 Descargar Reporte Estratégico", data=pdf_data, file_name=f"Reporte_{selected_cat}.pdf", mime="application/pdf")
+
+elif app_mode == "📋 Reportes Detallados":
+    if 'data' in st.session_state:
+        st.subheader("Explorador de Datos Estratégicos")
+        st.dataframe(st.session_state['data'], use_container_width=True)
+    else:
+        st.info("No hay datos para mostrar.")
