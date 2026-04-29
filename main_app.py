@@ -3,6 +3,8 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import date
 import io
+import os
+import base64
 
 # ── 1. CONFIGURACIÓN DE NIVEL PROFESIONAL ──
 st.set_page_config(
@@ -18,25 +20,41 @@ st.markdown("""
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
         html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
         .main { background-color: #f8fafc; }
-        .stButton>button { width: 100%; border-radius: 8px; font-weight: 600; background-color: #1E293B; color: white; border: none; height: 3em; }
-        .stTabs [data-baseweb="tab"] { font-weight: 700; font-size: 1.1rem; }
+        .stButton>button { width: 100%; border-radius: 8px; font-weight: 600; background-color: #1E293B; color: white; border: none; height: 3.2em; }
+        .stTabs [data-baseweb="tab"] { font-weight: 700; font-size: 1.05rem; }
+        .stMetric { background-color: white; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; }
     </style>
 """, unsafe_allow_html=True)
 
-# ── 3. ENCABEZADO ──
-st.markdown("""
-    <div style="background-color: #0F172A; padding: 25px; border-radius: 15px; margin-bottom: 25px; border-left: 8px solid #3B82F6;">
-        <h1 style="color: white; margin: 0; font-size: 2.2rem; font-weight: 800;">
-            Purchasing Strategic Dashboard <span style="font-size: 0.9rem; color: #3B82F6; vertical-align: middle; border: 1px solid #3B82F6; padding: 2px 8px; border-radius: 10px; margin-left: 10px;">V4.0</span>
-        </h1>
-        <p style="color: #94A3B8; margin: 8px 0 0 0; font-size: 1.1rem;">
-            ACOMPAÑANTE DIGITAL: <strong>COMPRAS 4.0</strong> · ELYMAR ESTÉVEZ
-        </p>
+# ── 3. LÓGICA PARA CARGAR TU FOTO (elymar.png) ──
+def get_base64_img(file_path):
+    if os.path.exists(file_path):
+        with open(file_path, "rb") as f:
+            data = f.read()
+        return f"data:image/png;base64,{base64.b64encode(data).decode()}"
+    # Icono de respaldo si la foto no está
+    return "https://img.icons8.com/fluency/96/businesswoman.png"
+
+foto_base64 = get_base64_img("elymar.png")
+
+# ── 4. ENCABEZADO PREMIUM CON TU MARCA PERSONAL ──
+st.markdown(f"""
+    <div style="background-color: #0F172A; padding: 25px; border-radius: 15px; margin-bottom: 25px; border-left: 8px solid #3B82F6; display: flex; align-items: center;">
+        <div style="flex-shrink: 0; margin-right: 25px;">
+            <img src="{foto_base64}" style="width: 100px; height: 100px; border-radius: 50%; border: 3px solid #3B82F6; object-fit: cover; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+        </div>
+        <div style="flex-grow: 1;">
+            <h1 style="color: white; margin: 0; font-size: 2.3rem; font-weight: 800; letter-spacing: -0.5px;">
+                Purchasing Strategic Dashboard <span style="font-size: 0.85rem; color: #3B82F6; vertical-align: middle; border: 1px solid #3B82F6; padding: 3px 10px; border-radius: 12px; margin-left: 12px; font-weight: 400;">V4.0</span>
+            </h1>
+            <p style="color: #94A3B8; margin: 8px 0 0 0; font-size: 1.2rem; font-weight: 400;">
+                ACOMPAÑANTE DIGITAL: <strong>COMPRAS 4.0</strong> · POR ELYMAR ESTÉVEZ
+            </p>
+        </div>
     </div>
 """, unsafe_allow_html=True)
 
-# ── 4. BASE DE DATOS DE REGLAS MAESTRA (TODAS LAS CATEGORÍAS) ──
-# Formato: [Lista de palabras clave], Impacto Base, Riesgo Base
+# ── 5. MOTOR DE INTELIGENCIA DE CATEGORIZACIÓN (Omnicategoría) ──
 RULES_DB = {
     "MATERIA PRIMA ALIMENTACIÓN": [
         (['cacao', 'chocolate', 'frutos secos', 'aceites', 'grasas', 'edulcorantes', 'azucar'], 9, 8),
@@ -49,51 +67,50 @@ RULES_DB = {
     ],
     "DIRECTOS / INDUSTRIALES": [
         (['acero', 'hierro', 'metales', 'quimicos', 'resinas', 'componentes'], 9, 8),
-        (['repuestos', 'mantenimiento', 'mro', 'herramientas'], 5, 6)
+        (['repuestos', 'mantenimiento', 'mro'], 5, 6)
     ],
-    "SERVICIOS / INDIRECTOS": [
-        (['consultoria', 'auditoria', 'legal'], 6, 4),
-        (['limpieza', 'seguridad', 'oficina', 'papeleria'], 2, 2),
-        (['marketing', 'publicidad', 'viajes'], 5, 3)
-    ],
-    "LOGÍSTICA": [
-        (['fletes', 'transporte', 'maritimo', 'puerto', 'aduana'], 8, 7),
-        (['ultima milla', 'paqueteria'], 5, 5)
-    ],
-    "TECNOLOGÍA (IT)": [
-        (['software', 'saas', 'erp', 'cloud', 'servidores'], 8, 7),
-        (['hardware', 'laptops', 'telefonia'], 6, 5)
-    ],
-    "ENERGÍA & UTILITIES": [
-        (['electricidad', 'gas', 'agua', 'fuel'], 10, 9)
+    "LOGÍSTICA / IT / OTROS": [
+        (['fletes', 'transporte', 'maritimo', 'aduana'], 8, 7),
+        (['software', 'saas', 'erp', 'cloud'], 8, 7),
+        (['electricidad', 'gas', 'energia'], 10, 9),
+        (['limpieza', 'seguridad', 'oficina'], 2, 2)
     ]
 }
 
-def get_kraljic_scores(categoria, subcategoria):
-    text = f"{categoria} {subcategoria}".lower()
-    imp, risk = 5, 5 # Valores neutros por defecto
-    
-    for cat_name, sub_rules in RULES_DB.items():
-        for keywords, i_score, r_score in sub_rules:
+def analyze_entry(row, total_spend):
+    text = f"{str(row['Categoría'])} {str(row['Subcategoría'])}".lower()
+    imp, risk = 5, 5
+    for _, sub_rules in RULES_DB.items():
+        for keywords, i_s, r_s in sub_rules:
             if any(k in text for k in keywords):
-                return i_score, r_score
-    return imp, risk
+                imp, risk = i_s, r_s
+                break
+    
+    # Factor Pareto: Si gasto > 12% del total, el impacto es crítico
+    if total_spend > 0 and (row['Gasto Anual (€)'] / total_spend) > 0.12:
+        imp = max(imp, 8)
 
-# ── 5. BARRA LATERAL ──
+    if imp >= 6 and risk >= 6: q = 'Estratégico'
+    elif imp >= 6 and risk < 6: q = 'Apalancamiento'
+    elif imp < 6 and risk >= 6: q = 'Cuello de Botella'
+    else: q = 'No Crítico'
+    
+    return imp, risk, q
+
+# ── 6. BARRA LATERAL ──
 with st.sidebar:
-    st.image("https://img.icons8.com/fluency/96/strategy.png", width=90)
-    st.markdown("### Navegación")
+    st.image("https://img.icons8.com/fluency/96/strategy.png", width=80)
+    st.markdown("### Centro de Control")
     st.divider()
     
-    # PLANTILLA COMPLETA
-    st.markdown("#### 📥 Plantilla de Categorías")
-    example_data = {
-        'Proveedor': ['Steel Co', 'Cocoa Global', 'Pack Solution', 'Logistics Pro', 'Soft Systems', 'Power Supply'],
-        'Categoría': ['Directos', 'Materia prima Alimentación', 'Packaging', 'Logística', 'Tecnología', 'Energía'],
-        'Subcategoría': ['Acero Inox', 'Cacao y chocolate', 'Laminado flexible', 'Fletes Marítimos', 'Software ERP', 'Electricidad'],
-        'Gasto Anual (€)': [800000, 450000, 120000, 300000, 150000, 500000]
-    }
-    df_template = pd.DataFrame(example_data)
+    # PLANTILLA PARA EL USUARIO
+    st.markdown("#### 📥 Preparar Datos")
+    df_template = pd.DataFrame({
+        'Proveedor': ['Ejemplo S.A.', 'Global Cocoa', 'Pack Center'],
+        'Categoría': ['Directos', 'Materia prima Alimentación', 'Packaging'],
+        'Subcategoría': ['Acero', 'Cacao', 'Estuchería'],
+        'Gasto Anual (€)': [500000, 350000, 95000]
+    })
     
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -102,52 +119,36 @@ with st.sidebar:
     st.download_button(
         label="Descargar Plantilla Excel",
         data=output.getvalue(),
-        file_name="plantilla_compras_40_completa.xlsx",
+        file_name="plantilla_compras40.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
     st.divider()
-    st.caption("Compras 4.0 - El Futuro Digital")
+    st.caption(f"Fecha: {date.today().strftime('%d/%m/%Y')}")
 
-# ── 6. CUERPO DE LA APP ──
-t1, t2, t3 = st.tabs(["📥 Gestión de Categorías", "📊 Matriz Interactiva", "💡 Estrategia Digital"])
+# ── 7. INTERFAZ PRINCIPAL ──
+t1, t2, t3 = st.tabs(["📥 Gestión de Datos", "📊 Matriz de Kraljic", "💡 Guía Estratégica"])
 
 with t1:
-    st.subheader("Entrada de Datos del Portfolio")
-    uploaded_file = st.file_uploader("Sube tu archivo (Excel/CSV)", type=['xlsx', 'csv'])
+    st.subheader("Carga de Categorías y Gastos")
+    uploaded_file = st.file_uploader("Sube tu archivo (Excel o CSV)", type=['xlsx', 'csv'])
     
-    if uploaded_file:
-        df_input = pd.read_excel(uploaded_file) if uploaded_file.name.endswith('.xlsx') else pd.read_csv(uploaded_file)
-    else:
-        df_input = df_template
+    df_actual = pd.read_excel(uploaded_file) if uploaded_file and uploaded_file.name.endswith('.xlsx') else \
+                (pd.read_csv(uploaded_file) if uploaded_file else df_template)
 
-    data_df = st.data_editor(df_input, num_rows="dynamic", use_container_width=True)
+    data_df = st.data_editor(df_actual, num_rows="dynamic", use_container_width=True)
 
-    if st.button("PROCESAR CATEGORÍAS 4.0", type="primary"):
-        total_gasto = data_df['Gasto Anual (€)'].sum()
-        processed_list = []
-        
+    if st.button("PROCESAR ANÁLISIS 4.0", type="primary"):
+        total = data_df['Gasto Anual (€)'].sum()
+        processed = []
         for _, row in data_df.iterrows():
-            i_base, r_base = get_kraljic_scores(row['Categoría'], row['Subcategoría'])
-            
-            # Factor de Impacto por Gasto (Pareto 4.0)
-            if total_gasto > 0 and (row['Gasto Anual (€)'] / total_gasto) > 0.10:
-                i_base = min(10, i_base + 1)
-            
-            # Cuadrante
-            if i_base >= 6 and r_base >= 6: q = 'Estratégico'
-            elif i_base >= 6 and r_base < 6: q = 'Apalancamiento'
-            elif i_base < 6 and r_base >= 6: q = 'Cuello de Botella'
-            else: q = 'No Crítico'
-            
-            processed_list.append({**row, 'Impacto': i_base, 'Riesgo': r_base, 'Cuadrante': q})
-        
-        st.session_state['data'] = pd.DataFrame(processed_list)
-        st.success("Análisis omnicategoría finalizado.")
+            i, r, q = analyze_entry(row, total)
+            processed.append({**row, 'Impacto': i, 'Riesgo': r, 'Cuadrante': q})
+        st.session_state['data'] = pd.DataFrame(processed)
+        st.success("¡Análisis omnicategoría listo!")
 
 with t2:
     if 'data' in st.session_state:
         df = st.session_state['data']
-        
         fig = go.Figure()
         colors = {'Estratégico': '#EF4444', 'Apalancamiento': '#10B981', 'Cuello de Botella': '#F59E0B', 'No Crítico': '#64748B'}
         
@@ -159,33 +160,33 @@ with t2:
                     mode='markers+text',
                     name=quad,
                     text=dff['Subcategoría'],
-                    marker=dict(size=dff['Gasto Anual (€)']/df['Gasto Anual (€)'].max()*50 + 20, color=color, opacity=0.8),
-                    textposition="top center"
+                    textposition="top center",
+                    marker=dict(size=dff['Gasto Anual (€)']/df['Gasto Anual (€)'].max()*50 + 20, color=color, opacity=0.7)
                 ))
 
         fig.update_layout(
-            title="Matriz de Kraljic Omnicategoría",
-            xaxis=dict(title="Impacto Financiero", range=[0, 11]),
-            yaxis=dict(title="Riesgo de Suministro", range=[0, 11]),
+            title="Matriz de Kraljic (Eje X: Impacto | Eje Y: Riesgo)",
+            xaxis=dict(title="Impacto Financiero", range=[0, 11], gridcolor='#e2e8f0'),
+            yaxis=dict(title="Riesgo de Suministro", range=[0, 11], gridcolor='#e2e8f0'),
             shapes=[
                 dict(type="line", x0=5.5, y0=0, x1=5.5, y1=11, line=dict(color="gray", dash="dash")),
                 dict(type="line", x0=0, y0=5.5, x1=11, y1=5.5, line=dict(color="gray", dash="dash"))
             ],
-            template="plotly_white", height=700
+            plot_bgcolor='white'
         )
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("Carga datos para generar la matriz.")
+        st.info("Carga datos para visualizar la matriz.")
 
 with t3:
     if 'data' in st.session_state:
         df = st.session_state['data']
         for q in ['Estratégico', 'Apalancamiento', 'Cuello de Botella', 'No Crítico']:
-            items = df[df['Cuadrante'] == q]
-            if not items.empty:
-                with st.expander(f"Estrategia 4.0 para {q.upper()}"):
-                    st.table(items[['Proveedor', 'Subcategoría', 'Gasto Anual (€)']])
-                    if q == 'Estratégico': st.error("Foco: Relaciones asociativas, gestión de la demanda y planes de contingencia.")
-                    elif q == 'Apalancamiento': st.success("Foco: Búsqueda de escala, licitaciones digitales y optimización de precios.")
-                    elif q == 'Cuello de Botella': st.warning("Foco: Asegurar volumen, rediseñar especificaciones y diversificar proveedores.")
-                    else: st.info("Foco: Automatización logística (E-procurement) y reducción de burocracia.")
+            subset = df[df['Cuadrante'] == q]
+            if not subset.empty:
+                with st.expander(f"Estrategia Digital para {q.upper()}"):
+                    st.table(subset[['Proveedor', 'Subcategoría', 'Gasto Anual (€)']])
+                    if q == 'Estratégico': st.error("Acción: Colaboración estrecha y gestión proactiva del riesgo.")
+                    elif q == 'Apalancamiento': st.success("Acción: Licitaciones competitivas y gestión de volumen de gasto.")
+                    elif q == 'Cuello de Botella': st.warning("Acción: Asegurar el suministro y buscar alternativas técnicas.")
+                    else: st.info("Acción: Eficiencia administrativa y automatización de procesos.")
