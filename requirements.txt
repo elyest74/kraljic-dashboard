@@ -1,6 +1,7 @@
 streamlit
+pandas
 plotly
 openpyxl
-pandas
 xlsxwriter
 fpdf2
+kaleido==0.2.1
