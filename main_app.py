@@ -2,137 +2,163 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import io
-import numpy as np
+import os
+from PIL import Image
 
 # ── 1. CONFIGURACIÓN DE PÁGINA ──
-st.set_page_config(page_title="Sourcing Intelligence Hub | Elymar Estévez", layout="wide", page_icon="📊")
+st.set_page_config(page_title="Sourcing Hub | Elymar Estévez", layout="wide", page_icon="📈")
 
-# ── 2. ESTILOS CSS (BANNER Y TABLAS) ──
+# ── 2. ESTILOS CSS (DISEÑO PREMIUM) ──
 st.markdown("""
     <style>
-        /* Estilo del Banner de Cabecera */
+        /* Banner Principal */
         .header-banner {
-            background-color: #1E293B;
-            padding: 30px;
-            border-radius: 15px;
+            background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+            padding: 45px;
+            border-radius: 20px;
             color: white;
             text-align: center;
-            margin-bottom: 25px;
-            border-bottom: 5px solid #10B981;
+            margin-bottom: 30px;
+            border-bottom: 6px solid #10B981;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
         }
-        .header-banner h1 { margin: 0; font-size: 2.5rem; font-weight: 800; color: white; }
-        .header-banner p { margin: 5px 0 0 0; font-size: 1.1rem; opacity: 0.8; }
+        .header-banner h1 { margin: 0; font-size: 3rem; font-weight: 800; letter-spacing: -1px; }
+        .header-banner p { font-size: 1.3rem; opacity: 0.8; margin-top: 10px; }
         
-        /* Estilo general */
-        .main-header { color: #0F172A; font-size: 1.8rem; font-weight: 700; margin-top: 20px; }
-        .stDataFrame { border: 1px solid #e2e8f0; }
+        /* Badge de Autor */
+        .author-tag {
+            display: inline-block;
+            background-color: #10B981;
+            color: white;
+            padding: 6px 18px;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 1rem;
+            margin-top: 15px;
+            text-transform: uppercase;
+        }
+
+        /* Sidebar Styling */
+        section[data-testid="stSidebar"] {
+            background-color: #F8FAFC;
+            border-right: 1px solid #E2E8F0;
+        }
     </style>
 """, unsafe_allow_html=True)
 
-# ── 3. CABECERA (BANNER INICIAL) ──
-st.markdown("""
+# ── 3. BARRA LATERAL: PERFIL DE ELYMAR ──
+with st.sidebar:
+    # Carga de la foto específica: elymar.png
+    foto_path = "elymar.png"
+    if os.path.exists(foto_path):
+        try:
+            img = Image.open(foto_path)
+            st.image(img, use_container_width=True)
+        except Exception as e:
+            st.error(f"Error al cargar la imagen: {e}")
+    else:
+        st.warning(f"⚠️ No se encontró el archivo '{foto_path}' en la raíz.")
+    
+    st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+    st.title("Elymar Estévez")
+    st.markdown("*Supply Chain & Data Expert*")
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.divider()
+
+    # Navegación
+    menu = st.radio("Módulos de Decisión:", ["📂 Gestión de Datos", "📊 Matriz de Kraljic"], index=1)
+    
+    st.divider()
+    # Plantilla de 4 columnas
+    try:
+        import xlsxwriter
+        buf = io.BytesIO()
+        with pd.ExcelWriter(buf, engine='xlsxwriter') as w:
+            pd.DataFrame(columns=['Proveedor', 'Categoría', 'Subcategoría', 'Gasto (€)']).to_excel(w, index=False)
+        st.download_button("📥 Bajar Plantilla Operativa", buf.getvalue(), "formato_compras.xlsx")
+    except:
+        pass
+
+# ── 4. CUERPO PRINCIPAL Y BANNER ──
+st.markdown(f"""
     <div class="header-banner">
-        <h1>📊 Sourcing Strategic Intelligence</h1>
-        <p>Dashboard Interactivo para la Toma de Decisiones en Compra de Materias Primas</p>
+        <h1>Sourcing Strategic Intelligence</h1>
+        <p>Cuadro de Mando Interactivo para Decisiones de Suministro</p>
+        <div class="author-tag">Desarrollado por Elymar Estévez</div>
     </div>
 """, unsafe_allow_html=True)
 
-# ── 4. BARRA LATERAL Y PLANTILLA EXCEL ──
-with st.sidebar:
-    st.title("⚙️ Configuración")
-    
-    # Generador de Plantilla con las 4 columnas exactas
-    try:
-        import xlsxwriter
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-            pd.DataFrame(columns=['Proveedor', 'Categoría', 'Subcategoría', 'Gasto (€)']).to_excel(writer, index=False)
-        st.download_button(
-            label="📥 Descargar Plantilla Excel",
-            data=buffer.getvalue(),
-            file_name="plantilla_compras_v13.xlsx",
-            mime="application/vnd.ms-excel"
-        )
-    except ImportError:
-        st.error("Instala 'xlsxwriter' para habilitar la descarga de Excel")
-    
-    st.divider()
-    menu = st.radio("Navegación:", ["1. Gestión de Datos", "2. Análisis de Matriz"])
-    st.divider()
-    st.caption("Desarrollado por Elymar Estévez")
-
-# ── 5. FUNCION PARA CREAR MATRICES (ESTILO REFERENCIA) ──
-def draw_kraljic(df, label_col, title):
+# ── 5. FUNCIÓN MOTOR DE LA MATRIZ ──
+def draw_kraljic_pro(df, label_col, title):
     fig = go.Figure()
-    # Cuadrantes con colores pastel de la imagen enviada anteriormente
-    fig.add_shape(type="rect", x0=0, y0=5.5, x1=5.5, y1=11.5, fillcolor="#FEF3C7", line_width=0, layer="below") # Cuello Botella
-    fig.add_shape(type="rect", x0=5.5, y0=5.5, x1=11.5, y1=11.5, fillcolor="#FEE2E2", line_width=0, layer="below") # Estratégico
-    fig.add_shape(type="rect", x0=0, y0=0, x1=5.5, y1=5.5, fillcolor="#F1F5F9", line_width=0, layer="below") # No Crítico
-    fig.add_shape(type="rect", x0=5.5, y0=0, x1=11.5, y1=5.5, fillcolor="#D1FAE5", line_width=0, layer="below") # Apalancamiento
+    
+    # Cuadrantes basados en tu imagen de referencia
+    fig.add_shape(type="rect", x0=0, y0=5.5, x1=5.5, y1=11, fillcolor="#FEF3C7", line_width=0, layer="below")
+    fig.add_shape(type="rect", x0=5.5, y0=5.5, x1=11, y1=11, fillcolor="#FEE2E2", line_width=0, layer="below")
+    fig.add_shape(type="rect", x0=0, y0=0, x1=5.5, y1=5.5, fillcolor="#F1F5F9", line_width=0, layer="below")
+    fig.add_shape(type="rect", x0=5.5, y0=0, x1=11, y1=5.5, fillcolor="#D1FAE5", line_width=0, layer="below")
 
-    # Etiquetas de texto de cuadrantes
-    for txt, x, y in [("CUELLO BOTELLA", 2.75, 10.8), ("ESTRATÉGICO", 8.25, 10.8), ("NO CRÍTICO", 2.75, 0.5), ("APALANCAMIENTO", 8.25, 0.5)]:
-        fig.add_annotation(x=x, y=y, text=txt, showarrow=False, font=dict(size=18, color="#94A3B8", family="Arial Black"))
+    # Etiquetas de Cuadrante
+    quads = [("CUELLO BOTELLA", 2.75, 10.5), ("ESTRATÉGICO", 8.25, 10.5), 
+             ("NO CRÍTICO", 2.75, 0.5), ("APALANCAMIENTO", 8.25, 0.5)]
+    for t, x, y in quads:
+        fig.add_annotation(x=x, y=y, text=t, showarrow=False, font=dict(size=16, color="#94A3B8", family="Arial Black"))
 
-    # Burbujas
+    # Puntos de Datos (Burbujas)
     fig.add_trace(go.Scatter(
         x=df['Impacto'], y=df['Riesgo'], mode='markers+text',
         text=df[label_col], textposition="top center",
-        marker=dict(size=df['Gasto']/df['Gasto'].max()*45 + 25, color='#334155', line=dict(width=1.5, color='white')),
-        hovertemplate="<b>%{text}</b><br>Gasto: %{customdata:,.2f} €<extra></extra>",
-        customdata=df['Gasto']
+        marker=dict(size=df['Gasto']/df['Gasto'].max()*40 + 25, color='#334155', line=dict(width=2, color='white')),
+        customdata=df['Gasto'],
+        hovertemplate="<b>%{text}</b><br>Gasto: %{customdata:,.2f} €<extra></extra>"
     ))
     
     fig.update_layout(
-        title=title, xaxis=dict(title="IMPACTO FINANCIERO", range=[-0.5, 11.5]),
+        title=dict(text=title, font=dict(size=20)),
+        xaxis=dict(title="IMPACTO FINANCIERO", range=[-0.5, 11.5]),
         yaxis=dict(title="RIESGO DE SUMINISTRO", range=[-0.5, 11.5]),
-        height=650, template="plotly_white"
+        template="plotly_white", height=700
     )
     return fig
 
-# ── 6. LÓGICA DE CARGA ──
-if menu == "1. Gestión de Datos":
-    st.markdown("<h2 class='main-header'>📥 Carga de Gastos Anuales</h2>", unsafe_allow_html=True)
-    archivo = st.file_uploader("Sube el archivo Excel completado", type=['xlsx'])
+# ── 6. LÓGICA DE APLICACIÓN ──
+if menu == "📂 Gestión de Datos":
+    st.subheader("📥 Carga de Datos")
+    file = st.file_uploader("Sube el archivo Excel (Proveedor, Categoría, Subcategoría, Gasto)", type=['xlsx'])
     
-    if archivo:
-        df_raw = pd.read_excel(archivo)
-        df_raw['Gasto (€)'] = pd.to_numeric(df_raw['Gasto (€)'], errors='coerce').fillna(0)
+    if file:
+        df = pd.read_excel(file)
+        df['Gasto (€)'] = pd.to_numeric(df['Gasto (€)'], errors='coerce').fillna(0)
+        total = df['Gasto (€)'].sum()
         
-        # Consolidación para Nivel 1 (Categoría)
-        res_cat = df_raw.groupby('Categoría').agg({'Gasto (€)': 'sum'}).reset_index()
-        total_g = res_cat['Gasto (€)'].sum()
-        res_cat['Impacto'] = res_cat['Gasto (€)'].apply(lambda x: 9 if x/total_g > 0.15 else (6 if x/total_g > 0.05 else 3))
-        res_cat['Riesgo'] = res_cat['Categoría'].apply(lambda x: 8 if "ALIM" in str(x).upper() else 4)
-        st.session_state['df_nivel1'] = res_cat.rename(columns={'Gasto (€)': 'Gasto'})
+        # Procesar Nivel 1 (Categoría)
+        n1 = df.groupby('Categoría').agg({'Gasto (€)': 'sum'}).reset_index()
+        n1['Impacto'] = n1['Gasto (€)'].apply(lambda x: 9 if x/total > 0.15 else (6 if x/total > 0.05 else 3))
+        n1['Riesgo'] = n1['Categoría'].apply(lambda x: 8 if any(k in str(x).upper() for k in ["ALIM", "ENER", "QUIM"]) else 4)
+        st.session_state['n1'] = n1.rename(columns={'Gasto (€)': 'Gasto'})
 
-        # Consolidación para Nivel 2 (Subcategoría)
-        res_sub = df_raw.groupby(['Categoría', 'Subcategoría']).agg({'Gasto (€)': 'sum', 'Proveedor': 'first'}).reset_index()
-        res_sub['Impacto'] = res_sub['Gasto (€)'].apply(lambda x: 9 if x/total_g > 0.10 else (6 if x/total_g > 0.02 else 3))
-        res_sub['Riesgo'] = res_sub['Categoría'].apply(lambda x: 8 if "ALIM" in str(x).upper() else 4)
-        st.session_state['df_nivel2'] = res_sub.rename(columns={'Gasto (€)': 'Gasto'})
+        # Procesar Nivel 2 (Subcategoría)
+        n2 = df.groupby(['Categoría', 'Subcategoría']).agg({'Gasto (€)': 'sum', 'Proveedor': 'first'}).reset_index()
+        n2['Impacto'] = n2['Gasto (€)'].apply(lambda x: 9 if x/total > 0.08 else (6 if x/total > 0.02 else 3))
+        n2['Riesgo'] = n2['Categoría'].apply(lambda x: 8 if any(k in str(x).upper() for k in ["ALIM", "ENER", "QUIM"]) else 4)
+        st.session_state['n2'] = n2.rename(columns={'Gasto (€)': 'Gasto'})
+        st.success("✅ Estructura procesada correctamente.")
 
-        st.success("✅ Datos procesados con éxito. Dirígete a 'Análisis de Matriz'.")
-        st.dataframe(df_raw, use_container_width=True, hide_index=True)
-
-# ── 7. LÓGICA DE MATRIZ DOS NIVELES ──
-elif menu == "2. Análisis de Matriz":
-    if 'df_nivel1' not in st.session_state:
-        st.warning("⚠️ Por favor, carga los datos en la sección 1.")
-    else:
-        tab_cat, tab_sub = st.tabs(["🏛️ NIVEL 1: Categorías", "🔍 NIVEL 2: Zoom Subcategorías"])
+elif menu == "📊 Matriz de Kraljic":
+    if 'n1' in st.session_state:
+        tab_macro, tab_micro = st.tabs(["🏛️ Visión Macro (Categorías)", "🔍 Visión Detallada (Subcategorías)"])
         
-        with tab_cat:
-            st.plotly_chart(draw_kraljic(st.session_state['df_nivel1'], 'Categoría', "Visión Global por Macro-Categoría"), use_container_width=True)
-            st.dataframe(st.session_state['df_nivel1'], hide_index=True, column_config={"Gasto": st.column_config.NumberColumn(format="%.2f €", width=200)})
-
-        with tab_sub:
-            df_s = st.session_state['df_nivel2']
-            cat_list = df_s['Categoría'].unique()
-            seleccion = st.selectbox("🎯 Selecciona una Categoría para ver sus detalles:", cat_list)
-            
-            df_filtrado = df_s[df_s['Categoría'] == seleccion]
-            
-            st.plotly_chart(draw_kraljic(df_filtrado, 'Subcategoría', f"Desglose de {seleccion}"), use_container_width=True)
-            st.dataframe(df_filtrado[['Subcategoría', 'Proveedor', 'Gasto']], hide_index=True, 
+        with tab_macro:
+            st.plotly_chart(draw_kraljic_pro(st.session_state['n1'], 'Categoría', "Posicionamiento por Macro-Categoría"), use_container_width=True)
+            st.dataframe(st.session_state['n1'].sort_values('Gasto', ascending=False), hide_index=True, 
                          column_config={"Gasto": st.column_config.NumberColumn(format="%.2f €", width=200)})
+
+        with tab_micro:
+            sel_cat = st.selectbox("Selecciona Categoría para auditar:", st.session_state['n2']['Categoría'].unique())
+            df_filtered = st.session_state['n2'][st.session_state['n2']['Categoría'] == sel_cat]
+            
+            st.plotly_chart(draw_kraljic_pro(df_filtered, 'Subcategoría', f"Desglose Estratégico: {sel_cat}"), use_container_width=True)
+            st.dataframe(df_filtered[['Subcategoría', 'Proveedor', 'Gasto']].sort_values('Gasto', ascending=False), hide_index=True,
+                         column_config={"Gasto": st.column_config.NumberColumn(format="%.2f €", width=200)})
+    else:
+        st.warning("⚠️ Sube los datos en el módulo de 'Gestión de Datos' para activar la matriz.")
