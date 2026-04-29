@@ -13,17 +13,23 @@ st.set_page_config(
     layout="wide"
 )
 
-# Inicializamos el estado de la pestaña si no existe
-if 'active_tab' not in st.session_state:
-    st.session_state.active_tab = 0
+# --- LÓGICA DE NAVEGACIÓN ROBUSTA ---
+if 'seccion_activa' not in st.session_state:
+    st.session_state.seccion_activa = "Gestion"
+
+def ir_a_matriz():
+    st.session_state.seccion_activa = "Matriz"
+
+def ir_a_gestion():
+    st.session_state.seccion_activa = "Gestion"
 
 # Estilos CSS Profesionales
 st.markdown("""
     <style>
         .main { background-color: #f8fafc; }
         .stMetric { background-color: white; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; }
-        /* Estilo para botones en paralelo */
-        div.stButton > button { border-radius: 8px; font-weight: bold; height: 3.5em; }
+        .stButton > button { border-radius: 8px; font-weight: bold; height: 3.5em; width: 100%; }
+        .nav-button { background-color: #1E293B; color: white !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -37,7 +43,7 @@ def get_base64_img(file_path):
 foto_base64 = get_base64_img("elymar.png")
 
 st.markdown(f"""
-    <div id="top" style="background-color: #0F172A; padding: 25px; border-radius: 15px; margin-bottom: 25px; border-left: 8px solid #3B82F6; display: flex; align-items: center;">
+    <div style="background-color: #0F172A; padding: 25px; border-radius: 15px; margin-bottom: 25px; border-left: 8px solid #3B82F6; display: flex; align-items: center;">
         <div style="flex-shrink: 0; margin-right: 25px;">
             <img src="{foto_base64}" style="width: 100px; height: 100px; border-radius: 50%; border: 3px solid #3B82F6; object-fit: cover;">
         </div>
@@ -71,15 +77,27 @@ def obtener_scores_base(cat):
     }
     return scores.get(cat, (5, 5))
 
-# ── 4. CONTROL DE PESTAÑAS DINÁMICO ──
-# Usamos un contenedor para las pestañas y el session state para controlar cuál está activa
-tabs = st.tabs(["📥 Gestión de Datos", "📊 Matriz & Estrategia"])
+# ── 4. NAVEGADOR DE SECCIONES (Sustituye a st.tabs) ──
+col_nav1, col_nav2 = st.columns(2)
+with col_nav1:
+    if st.button("📥 1. GESTIÓN DE DATOS", type="secondary" if st.session_state.seccion_activa == "Matriz" else "primary"):
+        st.session_state.seccion_activa = "Gestion"
+        st.rerun()
+with col_nav2:
+    if st.button("📊 2. MATRIZ Y ESTRATEGIA", type="primary" if st.session_state.seccion_activa == "Matriz" else "secondary"):
+        if 'data_final' in st.session_state:
+            st.session_state.seccion_activa = "Matriz"
+            st.rerun()
+        else:
+            st.warning("Primero debes procesar datos.")
 
-with tabs[0]:
+st.write("---")
+
+# ── 5. SECCIÓN: GESTIÓN DE DATOS ──
+if st.session_state.seccion_activa == "Gestion":
     st.subheader("Carga y Consolidación de Información")
     archivo = st.file_uploader("Sube tu Excel/CSV", type=['xlsx', 'csv'])
     
-    # Datos por defecto/ejemplo
     df_temp = pd.DataFrame({'Subcategoría': ['Cacao', 'Cacao', 'Cartón'], 'Gasto Anual (€)': [500000, 700000, 200000]})
     df_input = pd.read_excel(archivo) if archivo and archivo.name.endswith('.xlsx') else (pd.read_csv(archivo) if archivo else df_temp)
 
@@ -90,11 +108,10 @@ with tabs[0]:
 
     st.write("---")
     
-    # ── BOTONES EN PARALELO ──
-    col_btn1, col_btn2, col_spacer = st.columns([1, 1, 1.5])
+    col_btn1, col_btn2 = st.columns(2)
     
     with col_btn1:
-        if st.button("🚀 PROCESAR Y CONSOLIDAR", use_container_width=True):
+        if st.button("🚀 PROCESAR Y CONSOLIDAR"):
             df_consolidado = df_editor.groupby('Subcategoría').agg({
                 'Gasto Anual (€)': 'sum',
                 'Categoría': 'first'
@@ -122,27 +139,24 @@ with tabs[0]:
             st.success("¡Datos consolidados con éxito!")
 
     with col_btn2:
-        # Este botón solo aparece si ya hay datos procesados
         if 'data_final' in st.session_state:
-            if st.button("📊 VER RESULTADOS AHORA", type="primary", use_container_width=True):
-                # El truco: Streamlit recarga y al tener el anclaje en el link o la lógica de tabs, sube.
-                # Para un salto limpio, usamos este componente de JS invisible:
-                st.markdown('<script>window.parent.document.querySelector(".stTabs [id^=\'tabs-bui\'][id$=' + "'-tab-1']\").click();</script>", unsafe_allow_html=True)
-                st.info("Desplazando a Matriz...")
+            # ESTE BOTÓN AHORA SÍ CAMBIA EL ESTADO Y RECARGA LA PÁGINA
+            st.button("📊 VER RESULTADOS AHORA", on_click=ir_a_matriz, type="primary")
 
-with tabs[1]:
+# ── 6. SECCIÓN: MATRIZ Y ESTRATEGIA ──
+elif st.session_state.seccion_activa == "Matriz":
     if 'data_final' in st.session_state:
         res = st.session_state['data_final']
         
-        # KPIs de Cabecera
+        # KPIs
         c1, c2, c3 = st.columns(3)
         c1.metric("Gasto Consolidado", f"{res['Gasto'].sum():,.0f} €")
         c2.metric("Subcategorías Únicas", len(res))
         c3.metric("Riesgo Promedio", round(res['Riesgo'].mean(), 1))
 
         st.divider()
-        
-        # MATRIZ INTERACTIVA
+        st.info("💡 **TIP:** Pasa el ratón sobre los círculos para ver el detalle consolidado.")
+
         m1, m2 = st.columns([2, 1])
         with m1:
             fig = go.Figure()
@@ -171,7 +185,6 @@ with tabs[1]:
             fig_bar.update_layout(height=400, plot_bgcolor='white')
             st.plotly_chart(fig_bar, use_container_width=True)
 
-        # RECOMENDACIONES
         st.divider()
         st.subheader("📋 Recomendaciones Estratégicas Únicas")
         for q in ['Estratégico', 'Apalancamiento', 'Cuello de Botella', 'No Crítico']:
@@ -179,9 +192,12 @@ with tabs[1]:
             if not items.empty:
                 with st.expander(f"Ver Estrategias para: {q.upper()}"):
                     st.table(items[['Subcategoría', 'Gasto']].rename(columns={'Gasto': 'Gasto Total (€)'}))
-                    if q == 'Estratégico': st.error("Foco: Alianzas Estratégicas y SRM.")
-                    elif q == 'Apalancamiento': st.success("Foco: Licitaciones y Agregación de Volumen.")
-                    elif q == 'Cuello de Botella': st.warning("Foco: Garantía de Suministro y Sustitutos.")
-                    else: st.info("Foco: Automatización y Transaccionalidad.")
+                    if q == 'Estratégico': st.error("Foco: Alianzas Estratégicas.")
+                    elif q == 'Apalancamiento': st.success("Foco: Agregación de Volumen.")
+                    elif q == 'Cuello de Botella': st.warning("Foco: Seguridad de Suministro.")
+                    else: st.info("Foco: Eficiencia de procesos.")
+        
+        st.button("⬅️ VOLVER A GESTIÓN DE DATOS", on_click=ir_a_gestion)
     else:
-        st.warning("⚠️ Los resultados aparecerán aquí una vez proceses los datos en la pestaña anterior.")
+        st.warning("No hay datos procesados.")
+        st.button("Volver a Gestión", on_click=ir_a_gestion)
