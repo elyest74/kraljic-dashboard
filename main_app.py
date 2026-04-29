@@ -25,13 +25,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ── 2. LÓGICA DE NEGOCIO (KRALJIC) ──
+# ── 2. LÓGICA DE NEGOCIO (MATRIZ DE KRALJIC) ──
 def calculate_kraljic(df):
     if df.empty: return df
     total_spend = df['Gasto (€)'].sum()
-    # Impacto en resultados (Eje X) y Riesgo (Eje Y)
+    # Segmentación basada en impacto económico
     df['Impacto'] = df['Gasto (€)'].apply(lambda x: 9 if x/total_spend > 0.15 else (6 if x/total_spend > 0.05 else 3))
-    df['Riesgo'] = 5  # Valor base para la matriz
+    df['Riesgo'] = 5  # Riesgo base por defecto
     
     def get_quadrant(i, r):
         if i >= 6 and r >= 6: return 'Estratégico'
@@ -42,40 +42,52 @@ def calculate_kraljic(df):
     df['Cuadrante'] = df.apply(lambda x: get_quadrant(x['Impacto'], x['Riesgo']), axis=1)
     return df
 
-# ── 3. MOTOR DE GRÁFICOS (RESTAURACIÓN DE CUADRANTES) ──
+# ── 3. MOTOR DE GRÁFICOS (SIN DUPLICADOS EN LEYENDA) ──
 def draw_matrix(df, label_col):
     fig = go.Figure()
     
-    # Dibujar los 4 cuadrantes con sus colores estándar de Sourcing
-    fig.add_shape(type="rect", x0=0, y0=5.5, x1=5.5, y1=11, fillcolor="#FEF3C7", opacity=0.4, line_width=0, layer="below") # Cuello Botella
-    fig.add_shape(type="rect", x0=5.5, y0=5.5, x1=11, y1=11, fillcolor="#FEE2E2", opacity=0.4, line_width=0, layer="below") # Estratégico
-    fig.add_shape(type="rect", x0=0, y0=0, x1=5.5, y1=5.5, fillcolor="#F1F5F9", opacity=0.4, line_width=0, layer="below") # No Crítico
-    fig.add_shape(type="rect", x0=5.5, y0=0, x1=11, y1=5.5, fillcolor="#D1FAE5", opacity=0.4, line_width=0, layer="below") # Apalancamiento
+    # Dibujar Cuadrantes de Kraljic
+    fig.add_shape(type="rect", x0=0, y0=5.5, x1=5.5, y1=11, fillcolor="#FEF3C7", opacity=0.4, line_width=0, layer="below")
+    fig.add_shape(type="rect", x0=5.5, y0=5.5, x1=11, y1=11, fillcolor="#FEE2E2", opacity=0.4, line_width=0, layer="below")
+    fig.add_shape(type="rect", x0=0, y0=0, x1=5.5, y1=5.5, fillcolor="#F1F5F9", opacity=0.4, line_width=0, layer="below")
+    fig.add_shape(type="rect", x0=5.5, y0=0, x1=11, y1=5.5, fillcolor="#D1FAE5", opacity=0.4, line_width=0, layer="below")
 
+    # Paleta de colores profesional
     colors = px.colors.qualitative.Prism
     max_g = df['Gasto (€)'].max() if not df.empty else 1
     
-    for i, (_, row) in enumerate(df.iterrows()):
+    # SOLUCIÓN A ETIQUETAS REPETIDAS: 
+    # Agrupamos por la columna de etiquetas para crear una sola traza por nombre único
+    unique_labels = df[label_col].unique()
+    
+    for i, label in enumerate(unique_labels):
+        temp_df = df[df[label_col] == label]
+        
         fig.add_trace(go.Scatter(
-            x=[row['Impacto']], y=[row['Riesgo']],
+            x=temp_df['Impacto'], 
+            y=temp_df['Riesgo'],
             mode='markers',
-            name=str(row[label_col]),
+            name=str(label),
+            legendgroup=str(label), # Agrupa para evitar duplicados visuales
+            showlegend=True,
             marker=dict(
-                size=(row['Gasto (€)']/max_g)*55 + 15,
+                size=(temp_df['Gasto (€)']/max_g)*55 + 15,
                 color=colors[i % len(colors)],
                 line=dict(width=1.5, color='white')
             ),
-            hovertemplate=f"<b>{row[label_col]}</b><br>Gasto: {row['Gasto (€)']:,.2f} EUR<br>Cuadrante: {row['Cuadrante']}<extra></extra>"
+            hovertemplate=f"<b>{label}</b><br>Gasto: %{{customdata:,.2f}} EUR<extra></extra>",
+            customdata=temp_df['Gasto (€)']
         ))
     
     fig.update_layout(
-        xaxis=dict(title="IMPACTO ESTRATÉGICO", range=[-0.5, 11.5]),
-        yaxis=dict(title="RIESGO DE SUMINISTRO", range=[-0.5, 11.5]),
-        template="plotly_white", height=600, showlegend=True
+        xaxis=dict(title="IMPACTO ESTRATÉGICO (Gasto)", range=[-0.5, 11.5], gridcolor='#E2E8F0'),
+        yaxis=dict(title="RIESGO DE SUMINISTRO", range=[-0.5, 11.5], gridcolor='#E2E8F0'),
+        template="plotly_white", height=600,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     return fig
 
-# ── 4. GENERADOR DE PDF (PROTEGIDO CONTRA ERRORES) ──
+# ── 4. GENERADOR DE PDF PROFESIONAL (FIX UNICODE) ──
 def generate_safe_pdf(df_micro, category_name):
     pdf = FPDF()
     pdf.add_page()
@@ -85,24 +97,23 @@ def generate_safe_pdf(df_micro, category_name):
     pdf.rect(0, 0, 210, 40, 'F')
     pdf.set_font("Arial", 'B', 16)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(0, 15, "INFORME ESTRATEGICO DE COMPRAS", ln=True, align='C')
+    pdf.cell(0, 15, "REPORTE ESTRATEGICO DE COMPRAS", ln=True, align='C')
     pdf.set_font("Arial", '', 10)
-    pdf.cell(0, 10, f"Analisis de Categoria: {category_name} | Por: Elymar Estevez", ln=True, align='C')
+    pdf.cell(0, 10, f"Categoria: {category_name} | Analista: Elymar Estevez", ln=True, align='C')
     
     pdf.set_text_color(0, 0, 0)
     pdf.ln(25)
     
-    # Encabezados de tabla
+    # Encabezados de tabla (Usamos EUR en lugar de € para evitar error de codificación)
     pdf.set_font("Arial", 'B', 10)
     pdf.set_fill_color(230, 230, 230)
     pdf.cell(70, 10, "Subcategoria", 1, 0, 'C', True)
     pdf.cell(75, 10, "Proveedor", 1, 0, 'C', True)
     pdf.cell(40, 10, "Gasto (EUR)", 1, 1, 'C', True)
     
-    # Contenido de la tabla con limpieza de caracteres
+    # Contenido con limpieza Unicode (latin-1)
     pdf.set_font("Arial", '', 9)
     for _, row in df_micro.iterrows():
-        # Limpieza Unicode para evitar FPDFUnicodeEncodingException
         sub = str(row['Subcategoría']).encode('latin-1', 'replace').decode('latin-1')
         prov = str(row['Proveedor']).encode('latin-1', 'replace').decode('latin-1')
         
@@ -112,71 +123,72 @@ def generate_safe_pdf(df_micro, category_name):
         
     return bytes(pdf.output())
 
-# ── 5. ESTRUCTURA DE NAVEGACIÓN ──
+# ── 5. ESTRUCTURA DE LA APLICACIÓN ──
 with st.sidebar:
     if os.path.exists("elymar.png"):
         st.image("elymar.png", use_container_width=True)
     st.markdown("<h3 style='text-align: center;'>Elymar Estévez</h3>", unsafe_allow_html=True)
     st.divider()
-    app_mode = st.radio("Módulos:", ["📂 Carga de Datos", "📊 Cuadro de Mando"])
+    app_mode = st.radio("Navegación:", ["📂 Carga de Datos", "📊 Cuadro de Mando"])
 
-# Banner Principal
-st.markdown('<div class="header-banner"><h1>Sourcing Intelligence Dashboard</h1><div class="author-tag">Decisión Estratégica en Materias Primas</div></div>', unsafe_allow_html=True)
+st.markdown('<div class="header-banner"><h1>Sourcing Intelligence Dashboard</h1><div class="author-tag">Decisión Táctica y Estratégica</div></div>', unsafe_allow_html=True)
 
 if app_mode == "📂 Carga de Datos":
-    st.header("Gestión de Base de Datos")
-    file = st.file_uploader("Subir Excel de Compras", type=["xlsx"])
+    st.header("Importación de Datos")
+    file = st.file_uploader("Subir archivo Excel (.xlsx)", type=["xlsx"])
     if file:
         df = pd.read_excel(file)
-        # Validación de columnas mínima
-        if all(c in df.columns for c in ['Categoría', 'Subcategoría', 'Proveedor', 'Gasto (€)']):
+        # Validación de columnas críticas
+        required = ['Categoría', 'Subcategoría', 'Proveedor', 'Gasto (€)']
+        if all(c in df.columns for c in required):
             st.session_state['data'] = df
-            st.success("¡Datos cargados y validados correctamente!")
+            st.success("¡Base de datos cargada y sincronizada correctamente!")
             st.dataframe(df.head(10), use_container_width=True)
         else:
-            st.error("El archivo no tiene el formato correcto (Faltan columnas clave).")
+            st.error(f"Estructura inválida. El archivo debe contener: {', '.join(required)}")
 
 elif app_mode == "📊 Cuadro de Mando":
     if 'data' not in st.session_state:
-        st.info("💡 Por favor, ve al módulo de 'Carga de Datos' para empezar.")
+        st.info("👋 Por favor, carga un archivo en el módulo de 'Carga de Datos' para activar el dashboard.")
     else:
         df = st.session_state['data']
         
-        # Procesamiento Macro
+        # Procesamiento Nivel Macro
         df_macro = df.groupby('Categoría').agg({'Gasto (€)': 'sum'}).reset_index()
         df_macro = calculate_kraljic(df_macro)
         
-        # Visualización Macro
-        st.subheader("🌐 Visión Global de Categorías (Macro)")
+        st.subheader("🌐 Análisis Macro (Categorías)")
         st.plotly_chart(draw_matrix(df_macro, 'Categoría'), use_container_width=True)
         
         st.divider()
         
-        # Selección Micro
-        selected_cat = st.selectbox("Profundizar en una Categoría:", df_macro['Categoría'].unique())
+        # Análisis Micro
+        selected_cat = st.selectbox("Seleccione Categoría para desglose Micro:", df_macro['Categoría'].unique())
         df_micro = df[df['Categoría'] == selected_cat].groupby(['Subcategoría', 'Proveedor']).agg({'Gasto (€)': 'sum'}).reset_index()
         df_micro = calculate_kraljic(df_micro)
         
-        st.subheader(f"🔍 Detalle Táctico: {selected_cat}")
+        st.subheader(f"🔍 Análisis Micro: {selected_cat}")
         
-        # Columnas para Gráfico Micro y Botón PDF
-        col_graph, col_pdf = st.columns([4, 1])
+        # Layout para gráfico y acción de descarga
+        col_viz, col_rpt = st.columns([4, 1])
         
-        with col_graph:
+        with col_viz:
+            # Aquí el gráfico ya no tendrá etiquetas repetidas en la leyenda
             st.plotly_chart(draw_matrix(df_micro, 'Subcategoría'), use_container_width=True)
         
-        with col_pdf:
-            st.markdown("### Reporte")
+        with col_rpt:
+            st.write("### Reporte")
             try:
-                pdf_bytes = generate_safe_pdf(df_micro, selected_cat)
+                pdf_data = generate_safe_pdf(df_micro, selected_cat)
                 st.download_button(
-                    label="📥 Descargar PDF",
-                    data=pdf_bytes,
-                    file_name=f"Reporte_{selected_cat.replace(' ', '_')}.pdf",
+                    label="📥 Exportar PDF",
+                    data=pdf_data,
+                    file_name=f"Analisis_{selected_cat}.pdf",
                     mime="application/pdf",
                     use_container_width=True
                 )
-            except Exception as e:
-                st.error("Error al preparar el PDF.")
+            except:
+                st.error("Error en codificación PDF")
         
-        st.dataframe(df_micro.sort_values('Gasto (€)', ascending=False), hide_index=True)
+        # Tabla detallada inferior
+        st.dataframe(df_micro.sort_values('Gasto (€)', ascending=False), hide_index=True, use_container_width=True)
