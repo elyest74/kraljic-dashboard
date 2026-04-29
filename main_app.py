@@ -1,36 +1,35 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import io
 import os
 import base64
 
-# ── 1. CONFIGURACIÓN DE PÁGINA ──
+# ── 1. CONFIGURACIÓN TÉCNICA DEL DASHBOARD ──
 st.set_page_config(
-    page_title="Strategic Sourcing Dashboard | Elymar Estévez",
-    page_icon="📊",
+    page_title="Purchasing Intelligence Hub | Elymar Estévez",
+    page_icon="📈",
     layout="wide"
 )
 
-# Control de navegación (Session State)
+# Persistencia de estado (Session State)
 if 'seccion_activa' not in st.session_state:
     st.session_state.seccion_activa = "Gestion"
 
-def ir_a_matriz(): st.session_state.seccion_activa = "Matriz"
-def ir_a_gestion(): st.session_state.seccion_activa = "Gestion"
+def navegar_a(seccion):
+    st.session_state.seccion_activa = seccion
 
-# Estilos CSS Profesionales
+# Estilos de Interfaz de Usuario (UI)
 st.markdown("""
     <style>
-        .main { background-color: #f8fafc; }
-        .stMetric { background-color: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
-        .stButton > button { border-radius: 8px; font-weight: bold; height: 3.5em; width: 100%; transition: all 0.3s ease; }
-        .stButton > button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-        [data-testid="stExpander"] { border: 1px solid #e2e8f0; border-radius: 10px; background-color: white; margin-bottom: 1rem; }
+        .main { background-color: #f1f5f9; }
+        .stMetric { background-color: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; }
+        .stButton > button { border-radius: 8px; font-weight: bold; height: 3.5em; width: 100%; transition: all 0.2s; }
+        .stButton > button:hover { border: 2px solid #3B82F6; color: #3B82F6; }
+        .header-container { background-color: #0F172A; padding: 2rem; border-radius: 1rem; color: white; display: flex; align-items: center; margin-bottom: 2rem; border-left: 10px solid #3B82F6; }
     </style>
 """, unsafe_allow_html=True)
 
-# ── 2. ENCABEZADO Y MARCA PERSONAL ──
+# ── 2. BRANDING Y MARCA PERSONAL ──
 def get_base64_img(file_path):
     if os.path.exists(file_path):
         with open(file_path, "rb") as f:
@@ -40,18 +39,16 @@ def get_base64_img(file_path):
 foto_base64 = get_base64_img("elymar.png")
 
 st.markdown(f"""
-    <div style="background-color: #0F172A; padding: 25px; border-radius: 15px; margin-bottom: 25px; border-left: 8px solid #3B82F6; display: flex; align-items: center;">
-        <div style="flex-shrink: 0; margin-right: 25px;">
-            <img src="{foto_base64}" style="width: 100px; height: 100px; border-radius: 50%; border: 3px solid #3B82F6; object-fit: cover;">
-        </div>
-        <div style="flex-grow: 1;">
-            <h1 style="color: white; margin: 0; font-size: 2.2rem; font-weight: 800;">Strategic Sourcing Dashboard V5.0</h1>
-            <p style="color: #94A3B8; margin: 5px 0 0 0; font-size: 1.1rem;">CUADRO DE MANDO INTELIGENTE · POR <strong>ELYMAR ESTÉVEZ</strong></p>
+    <div class="header-container">
+        <img src="{foto_base64}" style="width: 90px; height: 90px; border-radius: 50%; border: 3px solid #3B82F6; margin-right: 20px; object-fit: cover;">
+        <div>
+            <h1 style="margin:0; font-size: 2rem;">Purchasing Strategic Dashboard V5.2</h1>
+            <p style="margin:0; opacity: 0.8; font-size: 1.1rem;">ELYMAR ESTÉVEZ | Senior Strategy Lead</p>
         </div>
     </div>
 """, unsafe_allow_html=True)
 
-# ── 3. LÓGICA DE CATEGORIZACIÓN AUTOMÁTICA ──
+# ── 3. LÓGICA DE NEGOCIO (ESTRATEGIA DE COMPRAS) ──
 DATABASE_INTEL = {
     "MATERIA PRIMA ALIMENTACIÓN": ['cacao', 'chocolate', 'aceite', 'grasa', 'cereales', 'harina', 'azucar', 'leche', 'cafe'],
     "PACKAGING": ['carton', 'estucheria', 'laminado', 'embalaje', 'pallet', 'etiqueta', 'envase', 'film'],
@@ -74,83 +71,80 @@ def obtener_scores_base(cat):
     }
     return scores.get(cat, (5, 5))
 
-# ── 4. BARRA DE NAVEGACIÓN SUPERIOR ──
-c_nav1, c_nav2 = st.columns(2)
-with c_nav1:
-    if st.button("📥 1. GESTIÓN DE DATOS", type="primary" if st.session_state.seccion_activa == "Gestion" else "secondary"):
-        ir_a_gestion()
+# ── 4. BARRA DE NAVEGACIÓN ──
+col_n1, col_n2 = st.columns(2)
+with col_n1:
+    if st.button("📥 GESTIÓN Y CARGA", type="primary" if st.session_state.seccion_activa == "Gestion" else "secondary"):
+        navegar_a("Gestion")
         st.rerun()
-with c_nav2:
-    if st.button("📊 2. MATRIZ Y ESTRATEGIA", type="primary" if st.session_state.seccion_activa == "Matriz" else "secondary"):
+with col_n2:
+    if st.button("📊 MATRIZ ESTRATÉGICA", type="primary" if st.session_state.seccion_activa == "Matriz" else "secondary"):
         if 'data_final' in st.session_state:
-            ir_a_matriz()
+            navegar_a("Matriz")
             st.rerun()
-        else: st.warning("⚠️ Debes procesar los datos en el paso 1.")
+        else: st.warning("Carga y procesa datos primero.")
 
-st.divider()
+st.write("---")
 
-# ── 5. SECCIÓN GESTIÓN DE DATOS ──
+# ── 5. SECCIÓN 1: GESTIÓN DE DATOS ──
 if st.session_state.seccion_activa == "Gestion":
-    st.subheader("Configuración de Entrada de Datos")
-    archivo = st.file_uploader("Carga tu Excel o CSV", type=['xlsx', 'csv'])
+    st.subheader("Entrada de Datos Consolidada")
+    archivo = st.file_uploader("Sube tu Excel o CSV", type=['xlsx', 'csv'])
     
-    df_temp = pd.DataFrame({'Subcategoría': ['Cacao', 'Cacao', 'Cajas Cartón'], 'Gasto Anual (€)': [500000, 700000, 200000]})
+    # Datos por defecto (Placeholder)
+    df_temp = pd.DataFrame({'Subcategoría': ['Cacao', 'Cacao', 'Packaging'], 'Gasto Anual (€)': [500000.0, 750000.0, 300000.0]})
     df_input = pd.read_excel(archivo) if archivo and archivo.name.endswith('.xlsx') else (pd.read_csv(archivo) if archivo else df_temp)
     
     if 'Categoría' not in df_input.columns:
         df_input['Categoría'] = df_input['Subcategoría'].apply(sugerir_cat)
     
-    st.markdown("##### Editor de Datos (Valida antes de procesar):")
+    st.markdown("##### Editor de Datos (Ajusta categorías y gastos)")
     df_editor = st.data_editor(df_input, num_rows="dynamic", use_container_width=True)
     
-    col_b1, col_b2 = st.columns(2)
-    with col_b1:
-        if st.button("🚀 PROCESAR Y CONSOLIDAR ANÁLISIS"):
-            # CONSOLIDACIÓN: Agrupamos por subcategoría para sumar el gasto
-            df_consolidado = df_editor.groupby('Subcategoría').agg({'Gasto Anual (€)': 'sum', 'Categoría': 'first'}).reset_index()
-            total_g = df_consolidado['Gasto Anual (€)'].sum()
-            final_list = []
+    if st.button("🚀 PROCESAR Y GENERAR ESTRATEGIA"):
+        # Consolidación de datos repetidos
+        df_cons = df_editor.groupby('Subcategoría').agg({'Gasto Anual (€)': 'sum', 'Categoría': 'first'}).reset_index()
+        total_g = df_cons['Gasto Anual (€)'].sum()
+        final_rows = []
+        
+        for _, row in df_cons.iterrows():
+            i_b, r_b = obtener_scores_base(row['Categoría'])
+            g = row['Gasto Anual (€)']
+            impacto = min(10, i_b + 1) if (g/total_g) > 0.15 else i_b
             
-            for _, row in df_consolidado.iterrows():
-                i_b, r_b = obtener_scores_base(row['Categoría'])
-                g = row['Gasto Anual (€)']
-                impacto = min(10, i_b + 1) if (g/total_g) > 0.15 else i_b
-                
-                if impacto >= 6 and r_b >= 6: q = 'Estratégico'
-                elif impacto >= 6 and r_b < 6: q = 'Apalancamiento'
-                elif impacto < 6 and r_b >= 6: q = 'Cuello de Botella'
-                else: q = 'No Crítico'
-                
-                final_list.append({'Categoría': row['Categoría'], 'Subcategoría': row['Subcategoría'], 'Gasto': g, 'Impacto': impacto, 'Riesgo': r_b, 'Cuadrante': q})
+            # Determinación de Cuadrante
+            if impacto >= 6 and r_b >= 6: q = 'Estratégico'
+            elif impacto >= 6 and r_b < 6: q = 'Apalancamiento'
+            elif impacto < 6 and r_b >= 6: q = 'Cuello de Botella'
+            else: q = 'No Crítico'
             
-            st.session_state['data_final'] = pd.DataFrame(final_list)
-            st.success("✅ ¡Consolidación exitosa! Subcategorías duplicadas agrupadas.")
-            
-    with col_b2:
-        if 'data_final' in st.session_state:
-            st.button("📊 VER MATRIZ DE KRALJIC", on_click=ir_a_matriz, type="primary")
+            final_rows.append({'Categoría': row['Categoría'], 'Subcategoría': row['Subcategoría'], 'Gasto': g, 'Impacto': impacto, 'Riesgo': r_b, 'Cuadrante': q})
+        
+        st.session_state['data_final'] = pd.DataFrame(final_rows)
+        st.success("Análisis completado. ¡Ve a la pestaña de Matriz!")
+        st.balloons()
 
-# ── 6. SECCIÓN MATRIZ Y ESTRATEGIA ──
+# ── 6. SECCIÓN 2: MATRIZ Y RESULTADOS ──
 elif st.session_state.seccion_activa == "Matriz":
     res = st.session_state['data_final']
     
-    # KPIs Superiores
+    # KPIs con formato de miles para visualización directa
     c1, c2, c3 = st.columns(3)
-    c1.metric("Gasto Consolidado", f"{res['Gasto'].sum():,.0f} €")
-    c2.metric("Nº Subcategorías", len(res))
-    c3.metric("Riesgo Promedio", round(res['Riesgo'].mean(), 1))
+    c1.metric("Gasto Total", f"{res['Gasto'].sum():,.2f} €")
+    c2.metric("Items Analizados", len(res))
+    c3.metric("Riesgo Promedio", f"{res['Riesgo'].mean():.1f} / 10")
 
     st.divider()
 
     m1, m2 = st.columns([2, 1])
+    
     with m1:
         fig = go.Figure()
-        
-        # Fondos de Cuadrantes (Shapes)
-        fig.add_shape(type="rect", x0=5.5, y0=0, x1=11, y1=5.5, fillcolor="rgba(16, 185, 129, 0.1)", line_width=0, layer="below") # Apalancamiento
-        fig.add_shape(type="rect", x0=5.5, y0=5.5, x1=11, y1=11, fillcolor="rgba(239, 68, 68, 0.1)", line_width=0, layer="below") # Estratégico
-        fig.add_shape(type="rect", x0=0, y0=5.5, x1=5.5, y1=11, fillcolor="rgba(245, 158, 11, 0.1)", line_width=0, layer="below") # Cuello Botella
-        fig.add_shape(type="rect", x0=0, y0=0, x1=5.5, y1=5.5, fillcolor="rgba(100, 116, 139, 0.1)", line_width=0, layer="below") # No Crítico
+        # Capas de fondo (Cuadrantes)
+        fig.add_shape(type="rect", x0=5.5, y0=0, x1=11, y1=5.5, fillcolor="rgba(16, 185, 129, 0.1)", line_width=0, layer="below")
+        fig.add_shape(type="rect", x0=5.5, y0=5.5, x1=11, y1=11, fillcolor="rgba(239, 68, 68, 0.1)", line_width=0, layer="below")
+        fig.add_shape(type="rect", x0=0, y0=5.5, x1=5.5, y1=11, fillcolor="rgba(245, 158, 11, 0.1)", line_width=0, layer="below")
+        fig.add_shape(type="rect", x0=0, y0=0, x1=5.5, y1=5.5, fillcolor="rgba(100, 116, 139, 0.1)", line_width=0, layer="below")
 
         colores = {'Estratégico': '#EF4444', 'Apalancamiento': '#10B981', 'Cuello de Botella': '#F59E0B', 'No Crítico': '#64748B'}
         for quad, color in colores.items():
@@ -158,63 +152,52 @@ elif st.session_state.seccion_activa == "Matriz":
             if not d.empty:
                 fig.add_trace(go.Scatter(
                     x=d['Impacto'], y=d['Riesgo'], mode='markers', name=quad,
-                    hovertemplate="<b>%{customdata[0]}</b><br>Gasto: %{customdata[1]:,.0f}€<extra></extra>",
+                    hovertemplate="<b>%{customdata[0]}</b><br>Gasto: %{customdata[1]:,.2f}€<extra></extra>",
                     customdata=list(zip(d['Subcategoría'], d['Gasto'])),
                     marker=dict(size=d['Gasto']/res['Gasto'].max()*50 + 20, color=color, opacity=0.9, line=dict(width=2, color='white'))
                 ))
-
+        
         fig.update_layout(
-            title="<b>MATRIZ DE KRALJIC ESTRATÉGICA</b>",
-            xaxis=dict(title="IMPACTO FINANCIERO", range=[0, 11], dtick=1, gridcolor='white'),
-            yaxis=dict(title="RIESGO DE SUMINISTRO", range=[0, 11], dtick=1, gridcolor='white'),
+            title="MATRIZ DE KRALJIC ESTRATÉGICA",
+            xaxis=dict(title="IMPACTO FINANCIERO", range=[0, 11], gridcolor="#e2e8f0"),
+            yaxis=dict(title="RIESGO DE SUMINISTRO", range=[0, 11], gridcolor="#e2e8f0"),
+            plot_bgcolor='white', height=600,
             shapes=[
-                dict(type="line", x0=5.5, y0=0, x1=5.5, y1=11, line=dict(color="#1e293b", width=2, dash="dot")),
-                dict(type="line", x0=0, y0=5.5, x1=11, y1=5.5, line=dict(color="#1e293b", width=2, dash="dot"))
-            ],
-            annotations=[
-                dict(x=2.75, y=10.5, text="⚠️ CUELLO DE BOTELLA", showarrow=False, font=dict(size=14, color="#B45309", family="Arial Black")),
-                dict(x=8.25, y=10.5, text="🔥 ESTRATÉGICO", showarrow=False, font=dict(size=14, color="#B91C1C", family="Arial Black")),
-                dict(x=2.75, y=0.5, text="⚙️ NO CRÍTICO", showarrow=False, font=dict(size=14, color="#475569", family="Arial Black")),
-                dict(x=8.25, y=0.5, text="💰 APALANCAMIENTO", showarrow=False, font=dict(size=14, color="#047857", family="Arial Black"))
-            ],
-            plot_bgcolor='white', height=700, margin=dict(l=0, r=0, t=50, b=0)
+                dict(type="line", x0=5.5, y0=0, x1=5.5, y1=11, line=dict(color="black", width=2, dash="dot")),
+                dict(type="line", x0=0, y0=5.5, x1=11, y1=5.5, line=dict(color="black", width=2, dash="dot"))
+            ]
         )
         st.plotly_chart(fig, use_container_width=True)
 
     with m2:
         st.markdown("### Mix de Gasto")
-        g_cat = res.groupby('Categoría')['Gasto'].sum().sort_values(ascending=True)
-        fig_bar = go.Figure(go.Bar(x=g_cat.values, y=g_cat.index, orientation='h', marker_color='#334155'))
-        fig_bar.update_layout(height=400, plot_bgcolor='white', margin=dict(t=0, b=0), xaxis=dict(showticklabels=False))
+        gasto_cat = res.groupby('Categoría')['Gasto'].sum().sort_values()
+        fig_bar = go.Figure(go.Bar(x=gasto_cat.values, y=gasto_cat.index, orientation='h', marker_color='#1E293B'))
+        fig_bar.update_layout(height=400, plot_bgcolor='white', margin=dict(t=20, b=20, l=0, r=0))
         st.plotly_chart(fig_bar, use_container_width=True)
 
-    st.divider()
-    st.subheader("📋 Recomendaciones y Detalle Consolidado")
-    
+    st.subheader("📋 Recomendaciones Detalladas")
     for q in ['Estratégico', 'Apalancamiento', 'Cuello de Botella', 'No Crítico']:
         items = res[res['Cuadrante'] == q]
         if not items.empty:
-            with st.expander(f"🛒 Cuadrante: {q.upper()} ({len(items)} items)"):
-                # TABLA CON AJUSTE DE COLUMNAS Y FORMATO DE MILES
+            with st.expander(f"Items en {q.upper()}"):
+                # TABLA AJUSTADA: Eliminamos el problema del formato raro
                 st.dataframe(
                     items[['Subcategoría', 'Gasto']].rename(columns={'Gasto': 'Gasto Total (€)'}),
                     hide_index=True,
-                    use_container_width=False, 
+                    use_container_width=False,
                     column_config={
-                        "Subcategoría": st.column_config.TextColumn("Subcategoría", width="medium"),
+                        "Subcategoría": st.column_config.TextColumn("Subcategoría", width=300),
                         "Gasto Total (€)": st.column_config.NumberColumn(
                             "Gasto Total (€)",
-                            format="#,##0.00 €", # Puntos para miles y decimales
-                            width=200 # Ancho ajustado a ~18-20 caracteres
+                            format="%.2f €", # Esto permite decimales y símbolo
+                            width=220        # Suficiente ancho para miles
                         )
                     }
                 )
-                
-                # Resumen estratégico
-                if q == 'Estratégico': st.error("🎯 FOCO: Alianzas a largo plazo, SRM y reducción de dependencia.")
-                elif q == 'Apalancamiento': st.success("🎯 FOCO: Licitaciones competitivas y agregación de volúmenes.")
-                elif q == 'Cuello de Botella': st.warning("🎯 FOCO: Garantía de suministro y búsqueda de alternativas.")
-                else: st.info("🎯 FOCO: Automatización administrativa y compras delegadas.")
-    
-    st.write("")
-    st.button("⬅️ VOLVER A GESTIÓN DE DATOS", on_click=ir_a_gestion)
+                if q == 'Estratégico': st.error("Estrategia: Alianzas y contratos a largo plazo.")
+                elif q == 'Apalancamiento': st.success("Estrategia: Licitaciones y optimización de precio.")
+                elif q == 'Cuello de Botella': st.warning("Estrategia: Asegurar stock y buscar sustitutos.")
+                else: st.info("Estrategia: Simplificación y automatización de procesos.")
+
+    st.button("⬅️ VOLVER A GESTIÓN", on_click=navegar_a, args=("Gestion",))
