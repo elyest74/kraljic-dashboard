@@ -4,4 +4,3 @@ plotly
 openpyxl
 xlsxwriter
 fpdf2
-kaleido
