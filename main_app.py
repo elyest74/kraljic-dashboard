@@ -56,8 +56,6 @@ def segmentacion_kraljic(df):
     if df.empty: return df
     total_gasto = df['Gasto (€)'].sum()
     
-    # Eje X: Impacto económico (Basado en Pareto real)
-    # Eje Y: Riesgo de suministro (Valor base 5, editable por analista)
     df['Impacto'] = df['Gasto (€)'].apply(lambda x: 9 if x/total_gasto > 0.15 else (6 if x/total_gasto > 0.05 else 3))
     df['Riesgo'] = 5 
     
@@ -71,7 +69,7 @@ def segmentacion_kraljic(df):
     df['% Peso'] = (df['Gasto (€)'] / total_gasto) * 100
     return df
 
-# ── 4. MOTOR DE VISUALIZACIÓN PROFESIONAL ──
+# ── 4. MOTOR DE VISUALIZACIÓN PROFESIONAL (CORREGIDO SOLAPAMIENTO) ──
 def render_kraljic(df, label_col):
     fig = go.Figure()
 
@@ -86,7 +84,6 @@ def render_kraljic(df, label_col):
         fig.add_shape(type="rect", x0=x0, y0=y0, x1=x1, y1=y1, fillcolor=color, opacity=0.4, line_width=0, layer="below")
         fig.add_annotation(x=x0+2.7, y=y0+5, text=name, showarrow=False, font=dict(color="grey", size=10), opacity=0.3)
 
-    # Burbujas agrupadas (evita duplicados en leyenda)
     max_bubble = df['Gasto (€)'].max() if not df.empty else 1
     colors = px.colors.qualitative.Bold
     
@@ -100,11 +97,21 @@ def render_kraljic(df, label_col):
             customdata=sub_df['Gasto (€)'], text=sub_df['Cuadrante']
         ))
 
+    # AJUSTE DE LEYENDA Y MÁRGENES PARA EVITAR SOLAPAMIENTO
     fig.update_layout(
         xaxis=dict(title="IMPACTO ECONÓMICO (Gasto)", range=[-0.5, 11.5]),
         yaxis=dict(title="RIESGO DE SUMINISTRO", range=[-0.5, 11.5]),
-        template="plotly_white", height=600, showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+        template="plotly_white", 
+        height=650, # Aumentado ligeramente para dar aire
+        margin=dict(b=120), # Aumentado margen inferior para la leyenda
+        showlegend=True,
+        legend=dict(
+            orientation="h", 
+            yanchor="top", 
+            y=-0.25, # Movida más hacia abajo para no tocar el título del eje X
+            xanchor="center", 
+            x=0.5
+        )
     )
     return fig
 
@@ -148,7 +155,6 @@ if uploaded_file:
         df_macro = data.groupby('Categoría').agg({'Gasto (€)': 'sum'}).reset_index()
         df_macro = segmentacion_kraljic(df_macro).sort_values('Gasto (€)', ascending=False)
         
-        # Dashboard Layout
         col_map, col_table = st.columns([2, 1])
         with col_map:
             st.plotly_chart(render_kraljic(df_macro, 'Categoría'), use_container_width=True)
@@ -166,13 +172,11 @@ if uploaded_file:
         
         st.plotly_chart(render_kraljic(df_micro, 'Subcategoría'), use_container_width=True)
         
-        # TABLA DE GASTO DETALLADA
         st.markdown(f"### 📋 Gasto Detallado en {sel_cat}")
         st.dataframe(df_micro[['Subcategoría', 'Proveedor', 'Gasto (€)', 'Cuadrante']], 
                      hide_index=True, use_container_width=True,
                      column_config={"Gasto (€)": st.column_config.NumberColumn(format="%.2f €")})
         
-        # ESTRATEGIAS RECOMENDADAS
         st.markdown("### 💡 Tácticas Recomendadas")
         present_q = df_micro['Cuadrante'].unique()
         cols = st.columns(len(present_q))
